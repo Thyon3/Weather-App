@@ -16,7 +16,7 @@ class Myelevatedbutton extends StatelessWidget {
       ),
       onPressed: ontap,
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 70, vertical: 20),
+        padding: EdgeInsets.symmetric(horizontal: 50, vertical: 15),
         child: Text(
           text,
           style: GoogleFonts.lato(
@@ -24,7 +24,6 @@ class Myelevatedbutton extends StatelessWidget {
             fontSize: 35,
             fontWeight: FontWeight.w600,
           ),
-          textAlign: TextAlign.center,
         ),
       ),
     );
