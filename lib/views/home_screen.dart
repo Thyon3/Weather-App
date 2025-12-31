@@ -486,6 +486,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ),
                         const SizedBox(height: 20),
                         _InsightGrid(bundle: bundle),
+                        if (bundle.airQuality != null) ...[
+                          const SizedBox(height: 20),
+                          _AirQualityCard(airQuality: bundle.airQuality!),
+                        ],
                         const SizedBox(height: 24),
                         _HourlyForecastStrip(hourly: bundle.hourly),
                         if (bundle.daily.isNotEmpty) ...[
@@ -812,6 +816,154 @@ class _InsightTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AirQualityCard extends StatelessWidget {
+  const _AirQualityCard({required this.airQuality});
+
+  final AirQuality airQuality;
+
+  Color _badgeColor(int index) {
+    switch (index) {
+      case 1:
+        return const Color(0xFF20bf55);
+      case 2:
+        return const Color(0xFF78c091);
+      case 3:
+        return const Color(0xFFF4d35e);
+      case 4:
+        return const Color(0xFFF06543);
+      case 5:
+        return const Color(0xFFb61919);
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _healthTip(int index) {
+    switch (index) {
+      case 1:
+        return 'Breath easy—ideal air for outdoor workouts.';
+      case 2:
+        return 'Great for most people; keep ventilation flowing indoors.';
+      case 3:
+        return 'Sensitive groups should limit prolonged outdoor exertion.';
+      case 4:
+        return 'Cut back on outdoor time; consider masks if you head out.';
+      case 5:
+        return 'Stay indoors when possible and use air purifiers.';
+      default:
+        return 'Monitor conditions and take precautions as needed.';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final badgeColor = _badgeColor(airQuality.index);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Air Quality',
+                style: GoogleFonts.lato(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 18,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  color: badgeColor.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.circle, size: 10, color: badgeColor),
+                    const SizedBox(width: 6),
+                    Text(
+                      airQuality.category,
+                      style: GoogleFonts.lato(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _healthTip(airQuality.index),
+            style: GoogleFonts.lato(color: Colors.white70, fontSize: 14),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _PollutantStat(
+                label: 'PM2.5',
+                value: '${airQuality.pm25.toStringAsFixed(1)} µg/m³',
+              ),
+              _PollutantStat(
+                label: 'PM10',
+                value: '${airQuality.pm10.toStringAsFixed(1)} µg/m³',
+              ),
+              _PollutantStat(
+                label: 'O₃',
+                value: '${airQuality.ozone.toStringAsFixed(0)} µg/m³',
+              ),
+              _PollutantStat(
+                label: 'NO₂',
+                value: '${airQuality.no2.toStringAsFixed(0)} µg/m³',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PollutantStat extends StatelessWidget {
+  const _PollutantStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.lato(color: Colors.white60, fontSize: 12),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: GoogleFonts.lato(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }

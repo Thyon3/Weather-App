@@ -27,6 +27,8 @@ class CurrentWeather {
   CurrentWeather({
     required this.city,
     required this.country,
+    required this.latitude,
+    required this.longitude,
     required this.temperature,
     required this.feelsLike,
     required this.humidity,
@@ -42,6 +44,8 @@ class CurrentWeather {
 
   final String city;
   final String country;
+  final double latitude;
+  final double longitude;
   final double temperature;
   final double feelsLike;
   final int humidity;
@@ -59,11 +63,14 @@ class CurrentWeather {
     final main = json['main'] as Map<String, dynamic>? ?? {};
     final weatherList = json['weather'] as List<dynamic>? ?? [];
     final wind = json['wind'] as Map<String, dynamic>? ?? {};
+    final coord = json['coord'] as Map<String, dynamic>? ?? {};
     final timezoneOffset = (json['timezone'] as num?)?.toInt() ?? 0;
 
     return CurrentWeather(
       city: json['name'] as String? ?? '—',
       country: sys['country'] as String? ?? '',
+      latitude: (coord['lat'] as num?)?.toDouble() ?? 0,
+      longitude: (coord['lon'] as num?)?.toDouble() ?? 0,
       temperature: (main['temp'] as num?)?.toDouble() ?? 0,
       feelsLike: (main['feels_like'] as num?)?.toDouble() ?? 0,
       humidity: (main['humidity'] as num?)?.toInt() ?? 0,
@@ -74,18 +81,14 @@ class CurrentWeather {
       sunset: _toLocalTime(sys['sunset'], timezoneOffset),
       observationTime: _toLocalTime(json['dt'], timezoneOffset),
       condition: weatherList.isNotEmpty
-          ? WeatherCondition.fromJson(
-              weatherList.first as Map<String, dynamic>,
-            )
-          : WeatherCondition(label: 'Unknown', description: '', iconCode: '01d'),
+          ? WeatherCondition.fromJson(weatherList.first as Map<String, dynamic>)
+          : WeatherCondition(
+              label: 'Unknown',
+              description: '',
+              iconCode: '01d',
+            ),
       timezoneOffset: timezoneOffset,
     );
-  }
-
-  static DateTime _toLocalTime(dynamic epochSeconds, int offsetSeconds) {
-    final seconds = (epochSeconds as num?)?.toInt() ?? 0;
-    final utc = DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true);
-    return utc.add(Duration(seconds: offsetSeconds));
   }
 }
 
@@ -102,19 +105,93 @@ class HourlyForecast {
   final WeatherCondition condition;
   final double pop;
 
-  factory HourlyForecast.fromJson(Map<String, dynamic> json) {
+  factory HourlyForecast.fromJson(
+    Map<String, dynamic> json,
+    int timezoneOffset,
+  ) {
     final weatherList = json['weather'] as List<dynamic>? ?? [];
     return HourlyForecast(
-      timestamp: DateTime.fromMillisecondsSinceEpoch(
-        (json['dt'] as int? ?? 0) * 1000,
-        isUtc: true,
-      ),
+      timestamp: _toLocalTime(json['dt'], timezoneOffset),
       temperature: (json['main']?['temp'] as num?)?.toDouble() ?? 0,
       pop: (json['pop'] as num?)?.toDouble() ?? 0,
       condition: weatherList.isNotEmpty
           ? WeatherCondition.fromJson(weatherList.first as Map<String, dynamic>)
-          : WeatherCondition(label: 'Unknown', description: '', iconCode: '01d'),
+          : WeatherCondition(
+              label: 'Unknown',
+              description: '',
+              iconCode: '01d',
+            ),
     );
+  }
+}
+
+class DailyForecast {
+  DailyForecast({
+    required this.date,
+    required this.minTemp,
+    required this.maxTemp,
+    required this.condition,
+    required this.pop,
+  });
+
+  final DateTime date;
+  final double minTemp;
+  final double maxTemp;
+  final WeatherCondition condition;
+  final double pop;
+}
+
+class AirQuality {
+  AirQuality({
+    required this.index,
+    required this.pm25,
+    required this.pm10,
+    required this.ozone,
+    required this.no2,
+  });
+
+  final int index;
+  final double pm25;
+  final double pm10;
+  final double ozone;
+  final double no2;
+
+  factory AirQuality.fromJson(Map<String, dynamic> json) {
+    final list = json['list'] as List<dynamic>? ?? [];
+    if (list.isEmpty) {
+      return AirQuality(index: 1, pm25: 0, pm10: 0, ozone: 0, no2: 0);
+    }
+    final main =
+        (list.first as Map<String, dynamic>)['main'] as Map<String, dynamic>? ??
+        {};
+    final components =
+        (list.first as Map<String, dynamic>)['components']
+            as Map<String, dynamic>? ??
+        {};
+    return AirQuality(
+      index: (main['aqi'] as num?)?.toInt() ?? 1,
+      pm25: (components['pm2_5'] as num?)?.toDouble() ?? 0,
+      pm10: (components['pm10'] as num?)?.toDouble() ?? 0,
+      ozone: (components['o3'] as num?)?.toDouble() ?? 0,
+      no2: (components['no2'] as num?)?.toDouble() ?? 0,
+    );
+  }
+
+  String get category {
+    switch (index) {
+      case 1:
+        return 'Excellent';
+      case 2:
+        return 'Fair';
+      case 3:
+        return 'Moderate';
+      case 4:
+        return 'Poor';
+      case 5:
+        return 'Very Poor';
+      default:
+        return 'Unknown';
+    }
   }
 }
 
@@ -122,18 +199,32 @@ class WeatherBundle {
   WeatherBundle({
     required this.current,
     required this.hourly,
+    required this.daily,
+    this.airQuality,
   });
 
   final CurrentWeather current;
   final List<HourlyForecast> hourly;
+  final List<DailyForecast> daily;
+  final AirQuality? airQuality;
 
   WeatherBundle copyWith({
     CurrentWeather? current,
     List<HourlyForecast>? hourly,
+    List<DailyForecast>? daily,
+    AirQuality? airQuality,
   }) {
     return WeatherBundle(
       current: current ?? this.current,
       hourly: hourly ?? this.hourly,
+      daily: daily ?? this.daily,
+      airQuality: airQuality ?? this.airQuality,
     );
   }
+}
+
+DateTime _toLocalTime(dynamic epochSeconds, int offsetSeconds) {
+  final seconds = (epochSeconds as num?)?.toInt() ?? 0;
+  final utc = DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true);
+  return utc.add(Duration(seconds: offsetSeconds));
 }
