@@ -16,19 +16,24 @@ class SplashScreen extends StatefulWidget {
 class _SplaschScreenState extends State<SplashScreen> {
   late Timer _timer;
 
+  @override
   void initState() {
-    _timer = Timer(Duration(seconds: 100), () {
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => HomeScreen()),
-        );
-      }
-    });
+    super.initState();
+    _timer = Timer(const Duration(seconds: 3), _navigateToHome);
   }
 
+  void _navigateToHome() {
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const HomeScreen()),
+    );
+  }
+
+  @override
   void dispose() {
     _timer.cancel();
+    super.dispose();
   }
 
   @override
@@ -39,51 +44,46 @@ class _SplaschScreenState extends State<SplashScreen> {
       body: SafeArea(
         child: SingleChildScrollView(
           child: Container(
-            padding: EdgeInsets.symmetric(vertical: 90),
+            width: size.width,
+            padding: const EdgeInsets.symmetric(vertical: 90, horizontal: 24),
             child: Column(
               children: [
-                Center(
-                  child: Text(
-                    'Discover The\n Weather in Your City',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.roboto(
-                      textStyle: TextStyle(
-                        color: Colors.white,
-                        fontSize: 35,
-                        fontWeight: FontWeight.w700,
-                      ),
+                Text(
+                  'Discover The\n Weather in Your City',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.roboto(
+                    textStyle: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 35,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
+                const SizedBox(height: 40),
                 Image.asset(
                   'assets/images/weatherGirl.png',
-                  height: size.height * 0.5,
+                  height: size.height * 0.45,
+                  fit: BoxFit.contain,
                 ),
-                SizedBox(height: 20),
-
+                const SizedBox(height: 32),
                 Text(
-                  'Get to know your weather map and\n forecast ahead of eveyone to plan your nice day',
+                  'Get to know your weather map and\n forecast ahead of everyone to plan your perfect day.',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.lato(
-                    textStyle: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
+                    textStyle: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 18,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
-                Padding(
-                  padding: EdgeInsets.only(top: 30),
-                  child: Myelevatedbutton(
-                    ontap: () {
-                      _timer.cancel();
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (context) => HomeScreen()),
-                      );
-                    },
-                    text: "Get started",
-                  ),
+                const SizedBox(height: 40),
+                Myelevatedbutton(
+                  ontap: () {
+                    _timer.cancel();
+                    _navigateToHome();
+                  },
+                  text: "Get started",
                 ),
               ],
             ),
