@@ -1,23 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:weather_app/provider/theme_provider.dart';
 
-import 'package:weather_app/views/splash_screen.dart';
-import 'package:weather_app/Theme/theme.dart';
+import 'Theme/theme.dart';
+import 'provider/theme_provider.dart';
+import 'views/splash_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(ProviderScope(child: myApp()));
+  runApp(const ProviderScope(child: MyApp()));
 }
 
-class myApp extends ConsumerWidget {
+class MyApp extends ConsumerWidget {
+  const MyApp({super.key});
+
+  @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final themeMode = ref.watch(themeProvider);
+    final themeMode = ref.watch(themeProvider).value ?? ThemeMode.light;
     return MaterialApp(
-      home: SplashScreen(),
+      home: const SplashScreen(),
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: themeMode,
+      debugShowCheckedModeBanner: false,
     );
   }
 }
