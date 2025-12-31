@@ -80,13 +80,16 @@ class CurrentWeather {
       sunrise: _toLocalTime(sys['sunrise'], timezoneOffset),
       sunset: _toLocalTime(sys['sunset'], timezoneOffset),
       observationTime: _toLocalTime(json['dt'], timezoneOffset),
-      condition: weatherList.isNotEmpty
-          ? WeatherCondition.fromJson(weatherList.first as Map<String, dynamic>)
-          : WeatherCondition(
-              label: 'Unknown',
-              description: '',
-              iconCode: '01d',
-            ),
+      condition:
+          weatherList.isNotEmpty
+              ? WeatherCondition.fromJson(
+                weatherList.first as Map<String, dynamic>,
+              )
+              : WeatherCondition(
+                label: 'Unknown',
+                description: '',
+                iconCode: '01d',
+              ),
       timezoneOffset: timezoneOffset,
     );
   }
@@ -114,13 +117,16 @@ class HourlyForecast {
       timestamp: _toLocalTime(json['dt'], timezoneOffset),
       temperature: (json['main']?['temp'] as num?)?.toDouble() ?? 0,
       pop: (json['pop'] as num?)?.toDouble() ?? 0,
-      condition: weatherList.isNotEmpty
-          ? WeatherCondition.fromJson(weatherList.first as Map<String, dynamic>)
-          : WeatherCondition(
-              label: 'Unknown',
-              description: '',
-              iconCode: '01d',
-            ),
+      condition:
+          weatherList.isNotEmpty
+              ? WeatherCondition.fromJson(
+                weatherList.first as Map<String, dynamic>,
+              )
+              : WeatherCondition(
+                label: 'Unknown',
+                description: '',
+                iconCode: '01d',
+              ),
     );
   }
 }
@@ -201,24 +207,57 @@ class WeatherBundle {
     required this.hourly,
     required this.daily,
     this.airQuality,
+    this.alerts = const [],
   });
 
   final CurrentWeather current;
   final List<HourlyForecast> hourly;
   final List<DailyForecast> daily;
   final AirQuality? airQuality;
+  final List<WeatherAlert> alerts;
 
   WeatherBundle copyWith({
     CurrentWeather? current,
     List<HourlyForecast>? hourly,
     List<DailyForecast>? daily,
     AirQuality? airQuality,
+    List<WeatherAlert>? alerts,
   }) {
     return WeatherBundle(
       current: current ?? this.current,
       hourly: hourly ?? this.hourly,
       daily: daily ?? this.daily,
       airQuality: airQuality ?? this.airQuality,
+      alerts: alerts ?? this.alerts,
+    );
+  }
+}
+
+class WeatherAlert {
+  WeatherAlert({
+    required this.event,
+    required this.description,
+    required this.severity,
+    required this.sender,
+    required this.start,
+    required this.end,
+  });
+
+  final String event;
+  final String description;
+  final String severity;
+  final String sender;
+  final DateTime start;
+  final DateTime end;
+
+  factory WeatherAlert.fromJson(Map<String, dynamic> json, int timezoneOffset) {
+    return WeatherAlert(
+      event: json['event'] as String? ?? 'Weather alert',
+      description: json['description'] as String? ?? '',
+      severity: json['severity'] as String? ?? 'moderate',
+      sender: json['sender_name'] as String? ?? 'Weather service',
+      start: _toLocalTime(json['start'], timezoneOffset),
+      end: _toLocalTime(json['end'], timezoneOffset),
     );
   }
 }

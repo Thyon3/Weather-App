@@ -26,9 +26,8 @@ class WeatherService {
       );
     }
 
-    final normalizedCity = city.trim().isEmpty
-        ? WeatherConfig.defaultCity
-        : city.trim();
+    final normalizedCity =
+        city.trim().isEmpty ? WeatherConfig.defaultCity : city.trim();
 
     final currentJson = await _get(
       path: '/data/2.5/weather',
@@ -40,28 +39,50 @@ class WeatherService {
       queryParameters: _baseQuery(normalizedCity),
     );
 
+    final alertsJson = await _get(
+      path: '/data/2.5/onecall',
+      queryParameters: {
+        'lat': currentJson['coord']?['lat'].toString() ?? '0',
+        'lon': currentJson['coord']?['lon'].toString() ?? '0',
+        'appid': WeatherConfig.apiKey,
+        'exclude': 'current,minutely,hourly,daily',
+      },
+    );
+
     final current = CurrentWeather.fromJson(currentJson);
     final timezoneOffset = current.timezoneOffset;
 
-    final forecastList = (forecastJson['list'] as List<dynamic>? ?? [])
-        .cast<Map<String, dynamic>>();
+    final forecastList =
+        (forecastJson['list'] as List<dynamic>? ?? [])
+            .cast<Map<String, dynamic>>();
 
-    final hourly = forecastList
-        .map((item) => HourlyForecast.fromJson(item, timezoneOffset))
-        .take(12)
-        .toList();
+    final hourly =
+        forecastList
+            .map((item) => HourlyForecast.fromJson(item, timezoneOffset))
+            .take(12)
+            .toList();
 
     final daily = _buildDailyForecast(forecastList, timezoneOffset);
     final airQuality = await _fetchAirQuality(
       lat: current.latitude,
       lon: current.longitude,
     );
+    final alerts =
+        (alertsJson['alerts'] as List<dynamic>? ?? [])
+            .map(
+              (entry) => WeatherAlert.fromJson(
+                entry as Map<String, dynamic>,
+                timezoneOffset,
+              ),
+            )
+            .toList();
 
     return WeatherBundle(
       current: current,
       hourly: hourly,
       daily: daily,
       airQuality: airQuality,
+      alerts: alerts,
     );
   }
 
@@ -106,50 +127,56 @@ class WeatherService {
       grouped.putIfAbsent(timestamp, () => []).add(entry);
     }
 
-    final daily = grouped.entries.map((entry) {
-      final readings = entry.value;
-      double minTemp = double.infinity;
-      double maxTemp = -double.infinity;
-      double avgPop = 0;
-      Map<String, dynamic>? rep;
+    final daily =
+        grouped.entries.map((entry) {
+            final readings = entry.value;
+            double minTemp = double.infinity;
+            double maxTemp = -double.infinity;
+            double avgPop = 0;
+            Map<String, dynamic>? rep;
 
-      for (final reading in readings) {
-        final main = reading['main'] as Map<String, dynamic>? ?? {};
-        final tempMin = (main['temp_min'] as num?)?.toDouble();
-        final tempMax = (main['temp_max'] as num?)?.toDouble();
-        if (tempMin != null) {
-          minTemp = minTemp.isFinite
-              ? (tempMin < minTemp ? tempMin : minTemp)
-              : tempMin;
-        }
-        if (tempMax != null) {
-          maxTemp = maxTemp.isFinite
-              ? (tempMax > maxTemp ? tempMax : maxTemp)
-              : tempMax;
-        }
-        avgPop += (reading['pop'] as num?)?.toDouble() ?? 0;
-      }
+            for (final reading in readings) {
+              final main = reading['main'] as Map<String, dynamic>? ?? {};
+              final tempMin = (main['temp_min'] as num?)?.toDouble();
+              final tempMax = (main['temp_max'] as num?)?.toDouble();
+              if (tempMin != null) {
+                minTemp =
+                    minTemp.isFinite
+                        ? (tempMin < minTemp ? tempMin : minTemp)
+                        : tempMin;
+              }
+              if (tempMax != null) {
+                maxTemp =
+                    maxTemp.isFinite
+                        ? (tempMax > maxTemp ? tempMax : maxTemp)
+                        : tempMax;
+              }
+              avgPop += (reading['pop'] as num?)?.toDouble() ?? 0;
+            }
 
-      avgPop = readings.isEmpty ? 0 : avgPop / readings.length;
+            avgPop = readings.isEmpty ? 0 : avgPop / readings.length;
 
-      rep = _representativeReading(readings, timezoneOffset);
+            rep = _representativeReading(readings, timezoneOffset);
 
-      return DailyForecast(
-        date: entry.key,
-        minTemp: minTemp.isFinite ? minTemp : 0,
-        maxTemp: maxTemp.isFinite ? maxTemp : 0,
-        condition: rep != null
-            ? WeatherCondition.fromJson(
-                (rep['weather'] as List<dynamic>).first as Map<String, dynamic>,
-              )
-            : WeatherCondition(
-                label: 'Unknown',
-                description: '',
-                iconCode: '01d',
-              ),
-        pop: avgPop,
-      );
-    }).toList()..sort((a, b) => a.date.compareTo(b.date));
+            return DailyForecast(
+              date: entry.key,
+              minTemp: minTemp.isFinite ? minTemp : 0,
+              maxTemp: maxTemp.isFinite ? maxTemp : 0,
+              condition:
+                  rep != null
+                      ? WeatherCondition.fromJson(
+                        (rep['weather'] as List<dynamic>).first
+                            as Map<String, dynamic>,
+                      )
+                      : WeatherCondition(
+                        label: 'Unknown',
+                        description: '',
+                        iconCode: '01d',
+                      ),
+              pop: avgPop,
+            );
+          }).toList()
+          ..sort((a, b) => a.date.compareTo(b.date));
 
     return daily.take(5).toList();
   }
