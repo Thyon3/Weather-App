@@ -624,8 +624,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final city = ref.watch(cityQueryProvider);
     final favoritesState = ref.watch(favoritesProvider);
     final favorites = favoritesState.value ?? const <String>[];
-    final dismissedAlerts =
-        ref.watch(alertPreferencesProvider).value ?? const <String>{};
+    final alertPrefs = ref.watch(alertPreferencesProvider).value;
+    final dismissedAlerts = alertPrefs?.dismissed ?? const <String>{};
     final recentState = ref.watch(recentSearchProvider);
     final recents = recentState.value ?? const <String>[];
     final suggestions = _buildSuggestions(_draftQuery, favorites, recents);
