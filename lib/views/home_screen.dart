@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../Theme/theme.dart';
 import '../models/weather_models.dart';
@@ -257,6 +258,228 @@ class _LoadingState extends StatelessWidget {
     );
   }
 
+  Future<void> _shareWeather(WeatherBundle bundle) async {
+    final current = bundle.current;
+    final hourly =
+        bundle.hourly.isNotEmpty ? bundle.hourly.first : null;
+    final buffer = StringBuffer()
+      ..writeln(
+        'Weather in ${current.city}, ${current.country} '
+        '(${DateFormat('EEE, MMM d • h:mm a').format(current.observationTime)})',
+      )
+      ..writeln(
+        '• Temp: ${current.temperature.toStringAsFixed(0)}° '
+        '(feels like ${current.feelsLike.toStringAsFixed(0)}°)',
+      )
+      ..writeln(
+        '• Condition: ${current.condition.sentenceCaseDescription}',
+      )
+      ..writeln(
+        '• Humidity: ${current.humidity}%  |  Wind: ${current.windSpeed.toStringAsFixed(1)} m/s',
+      );
+
+    if (bundle.airQuality != null) {
+      buffer.writeln(
+        '• Air Quality: ${bundle.airQuality!.category} '
+        '(PM2.5 ${bundle.airQuality!.pm25.toStringAsFixed(1)} µg/m³)',
+      );
+    }
+    if (hourly != null) {
+      buffer.writeln(
+        'Next hour: ${hourly.temperature.toStringAsFixed(0)}° '
+        'with ${(hourly.pop * 100).round()}% chance of rain',
+      );
+    }
+    buffer.writeln('\nShared via Weather App ☀️🌧️');
+
+    await Share.share(buffer.toString());
+  }
+
+  Future<void> _openFavoritesManager(
+    List<String> favorites,
+    String activeCity,
+  ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final managedList = List<String>.from(favorites);
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              margin: const EdgeInsets.only(top: 40),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1B1B2C),
+                borderRadius: BorderRadius.circular(28),
+              ),
+              height: MediaQuery.of(context).size.height * 0.7,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        'Manage favorites',
+                        style: GoogleFonts.lato(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Drag to reorder, swipe to remove, or tap the star to set as default.',
+                    style: GoogleFonts.lato(color: Colors.white54, fontSize: 13),
+                  ),
+                  const SizedBox(height: 16),
+                  if (managedList.isEmpty)
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          'No favorites yet. Search for a city and add it!',
+                          style: GoogleFonts.lato(color: Colors.white54),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: ReorderableListView.builder(
+                        itemCount: managedList.length,
+                        buildDefaultDragHandles: false,
+                        padding: EdgeInsets.zero,
+                        onReorder: (oldIndex, newIndex) {
+                          setModalState(() {
+                            if (newIndex > oldIndex) newIndex -= 1;
+                            final city = managedList.removeAt(oldIndex);
+                            managedList.insert(newIndex, city);
+                          });
+                          ref
+                              .read(favoritesProvider.notifier)
+                              .reorder(oldIndex, newIndex);
+                        },
+                        itemBuilder: (context, index) {
+                          final cityName = managedList[index];
+                          final normalizedActive = normalizeCity(activeCity);
+                          final isActive =
+                              normalizeCity(cityName) == normalizedActive;
+                          return Dismissible(
+                            key: ValueKey(cityName),
+                            direction: DismissDirection.endToStart,
+                            background: Container(
+                              alignment: Alignment.centerRight,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 20),
+                              decoration: BoxDecoration(
+                                color: Colors.redAccent.withOpacity(0.8),
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              child: const Icon(Icons.delete,
+                                  color: Colors.white),
+                            ),
+                            onDismissed: (_) {
+                              setModalState(() {
+                                managedList.removeAt(index);
+                              });
+                              ref
+                                  .read(favoritesProvider.notifier)
+                                  .remove(cityName);
+                            },
+                            child: Card(
+                              color: Colors.white.withOpacity(0.05),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 4,
+                                ),
+                                leading: ReorderableDragStartListener(
+                                  index: index,
+                                  child: const Icon(Icons.drag_handle,
+                                      color: Colors.white54),
+                                ),
+                                title: Text(
+                                  cityName,
+                                  style: GoogleFonts.lato(
+                                    color: Colors.white,
+                                    fontWeight:
+                                        isActive ? FontWeight.w700 : FontWeight.w500,
+                                  ),
+                                ),
+                                subtitle: isActive
+                                    ? Text(
+                                        'Active city',
+                                        style: GoogleFonts.lato(
+                                          color: Colors.lightBlueAccent,
+                                          fontSize: 12,
+                                        ),
+                                      )
+                                    : null,
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.star,
+                                        color: isActive
+                                            ? Colors.yellowAccent
+                                            : Colors.white38,
+                                      ),
+                                      tooltip: 'Set as default city',
+                                      onPressed: () {
+                                        ref
+                                            .read(
+                                                favoritesProvider.notifier)
+                                            .promote(cityName);
+                                        ref
+                                            .read(cityQueryProvider.notifier)
+                                            .state = cityName;
+                                        ref
+                                            .read(weatherNotifierProvider
+                                                .notifier)
+                                            .updateCity(cityName);
+                                        Navigator.pop(context);
+                                      },
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline,
+                                          color: Colors.white54),
+                                      onPressed: () {
+                                        setModalState(() {
+                                          managedList.removeAt(index);
+                                        });
+                                        ref
+                                            .read(favoritesProvider.notifier)
+                                            .remove(cityName);
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
   Widget _shimmerBox({double height = 180}) {
     return Container(
       height: height,
@@ -442,20 +665,55 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
                 const SizedBox(height: 12),
                 favoritesState.when(
-                  data: (favorites) => _FavoritesStrip(
-                    favorites: favorites,
-                    activeCity: city,
-                    onCitySelected: (selected) {
-                      _cityController.text = selected;
-                      _cityController.selection = TextSelection.fromPosition(
-                        TextPosition(offset: selected.length),
-                      );
-                      ref
-                          .read(weatherNotifierProvider.notifier)
-                          .updateCity(selected);
-                    },
-                    onCityRemoved: (entry) =>
-                        ref.read(favoritesProvider.notifier).remove(entry),
+                  data: (favorites) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'Favorites',
+                            style: GoogleFonts.lato(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const Spacer(),
+                          TextButton.icon(
+                            onPressed: () => _openFavoritesManager(
+                              favorites,
+                              city,
+                            ),
+                            icon: const Icon(
+                              Icons.tune,
+                              color: Colors.white70,
+                              size: 18,
+                            ),
+                            label: const Text('Manage'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.white70,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      _FavoritesStrip(
+                        favorites: favorites,
+                        activeCity: city,
+                        onCitySelected: (selected) {
+                          _cityController.text = selected;
+                          _cityController.selection =
+                              TextSelection.fromPosition(
+                            TextPosition(offset: selected.length),
+                          );
+                          ref
+                              .read(weatherNotifierProvider.notifier)
+                              .updateCity(selected);
+                        },
+                        onCityRemoved: (entry) => ref
+                            .read(favoritesProvider.notifier)
+                            .remove(entry),
+                      ),
+                    ],
                   ),
                   loading: () => const SizedBox(
                     height: 32,
@@ -483,6 +741,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           onFavoriteTap: () => ref
                               .read(favoritesProvider.notifier)
                               .toggle(bundle.current.city),
+                          onShareTap: () => _shareWeather(bundle),
                         ),
                         const SizedBox(height: 20),
                         _InsightGrid(bundle: bundle),
@@ -584,11 +843,13 @@ class _CurrentConditionsCard extends StatelessWidget {
     required this.bundle,
     required this.isFavorite,
     required this.onFavoriteTap,
+    required this.onShareTap,
   });
 
   final WeatherBundle bundle;
   final bool isFavorite;
   final VoidCallback onFavoriteTap;
+  final VoidCallback onShareTap;
 
   String _formatDate(DateTime dateTime) {
     final formatter = DateFormat('EEE, MMM d • h:mm a');
@@ -637,13 +898,27 @@ class _CurrentConditionsCard extends StatelessWidget {
                   ],
                 ),
               ),
-              IconButton(
-                onPressed: onFavoriteTap,
-                icon: Icon(
-                  isFavorite ? Icons.bookmark : Icons.bookmark_border,
-                  color: Colors.white,
-                  size: 28,
-                ),
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: onShareTap,
+                    icon: const Icon(
+                      Icons.ios_share,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                    tooltip: 'Share forecast',
+                  ),
+                  IconButton(
+                    onPressed: onFavoriteTap,
+                    icon: Icon(
+                      isFavorite ? Icons.bookmark : Icons.bookmark_border,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                    tooltip: isFavorite ? 'Remove favorite' : 'Save favorite',
+                  ),
+                ],
               ),
               Image.network(
                 'https://openweathermap.org/img/wn/${current.condition.iconCode}@2x.png',

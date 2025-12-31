@@ -16,8 +16,8 @@ final cityQueryProvider = StateProvider<String>((ref) {
 
 final weatherNotifierProvider =
     AutoDisposeAsyncNotifierProvider<WeatherNotifier, WeatherBundle>(
-  WeatherNotifier.new,
-);
+      WeatherNotifier.new,
+    );
 
 class WeatherNotifier extends AutoDisposeAsyncNotifier<WeatherBundle> {
   @override

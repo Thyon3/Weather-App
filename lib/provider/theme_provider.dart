@@ -26,12 +26,10 @@ class ThemeProvider extends AsyncNotifier<ThemeMode> {
     final next = current == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
     state = AsyncValue.data(next);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _themePreferenceKey,
-      next.name,
-    );
+    await prefs.setString(_themePreferenceKey, next.name);
   }
 }
 
-final themeProvider =
-    AsyncNotifierProvider<ThemeProvider, ThemeMode>(() => ThemeProvider());
+final themeProvider = AsyncNotifierProvider<ThemeProvider, ThemeMode>(
+  () => ThemeProvider(),
+);

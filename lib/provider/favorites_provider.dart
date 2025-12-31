@@ -35,6 +35,28 @@ class FavoritesNotifier extends AsyncNotifier<List<String>> {
     await _persist(current);
   }
 
+  Future<void> reorder(int oldIndex, int newIndex) async {
+    final current = [...(state.value ?? await _load())];
+    if (oldIndex < 0 || oldIndex >= current.length) return;
+    if (newIndex < 0 || newIndex >= current.length) {
+      newIndex = current.length - 1;
+    }
+    if (oldIndex == newIndex) return;
+    final city = current.removeAt(oldIndex);
+    current.insert(newIndex, city);
+    await _persist(current);
+  }
+
+  Future<void> promote(String rawCity) async {
+    final city = normalizeCity(rawCity);
+    if (city.isEmpty) return;
+    final current = [...(state.value ?? await _load())];
+    if (!current.contains(city)) return;
+    current.remove(city);
+    current.insert(0, city);
+    await _persist(current);
+  }
+
   Future<void> remove(String rawCity) async {
     final city = normalizeCity(rawCity);
     if (city.isEmpty) return;
