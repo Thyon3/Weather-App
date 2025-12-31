@@ -5,8 +5,11 @@ import 'package:intl/intl.dart';
 
 import '../Theme/theme.dart';
 import '../models/weather_models.dart';
+import '../provider/favorites_provider.dart';
+import '../provider/recent_search_provider.dart';
 import '../provider/theme_provider.dart';
 import '../provider/weather_provider.dart';
+import '../utils/city_utils.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -17,18 +20,301 @@ class HomeScreen extends ConsumerStatefulWidget {
   }
 }
 
+class _DailyForecastList extends StatelessWidget {
+  const _DailyForecastList({required this.daily});
+
+  final List<DailyForecast> daily;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '5-day outlook',
+          style: GoogleFonts.lato(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 12),
+        ...daily.map(
+          (forecast) => Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    DateFormat('EEEE').format(forecast.date),
+                    style: GoogleFonts.lato(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Image.network(
+                  'https://openweathermap.org/img/wn/${forecast.condition.iconCode}.png',
+                  width: 40,
+                  height: 40,
+                  errorBuilder: (_, __, ___) =>
+                      const Icon(Icons.cloud_queue, color: Colors.white),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  forecast.condition.sentenceCaseDescription,
+                  style: GoogleFonts.lato(color: Colors.white70, fontSize: 14),
+                ),
+                const Spacer(),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '${forecast.maxTemp.toStringAsFixed(0)}° / ${forecast.minTemp.toStringAsFixed(0)}°',
+                      style: GoogleFonts.lato(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      '${(forecast.pop * 100).round()}% rain',
+                      style: GoogleFonts.lato(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SuggestionList extends StatelessWidget {
+  const _SuggestionList({
+    required this.isVisible,
+    required this.isLoading,
+    required this.hasHistory,
+    required this.suggestions,
+    required this.query,
+    required this.onSuggestionTap,
+    required this.onClearHistory,
+  });
+
+  final bool isVisible;
+  final bool isLoading;
+  final bool hasHistory;
+  final List<String> suggestions;
+  final String query;
+  final ValueChanged<String> onSuggestionTap;
+  final VoidCallback onClearHistory;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!isVisible) return const SizedBox.shrink();
+    if (isLoading) {
+      return const LinearProgressIndicator(minHeight: 2);
+    }
+    if (suggestions.isEmpty) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          query.isEmpty
+              ? 'Start searching to build your recent list.'
+              : 'No matches yet—try another spelling.',
+          style: GoogleFonts.lato(color: Colors.white54, fontSize: 14),
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              query.isEmpty ? 'Recent searches' : 'Suggestions',
+              style: GoogleFonts.lato(
+                color: Colors.white70,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (hasHistory && query.isEmpty)
+              TextButton(
+                onPressed: onClearHistory,
+                child: const Text('Clear all'),
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        ...suggestions.map(
+          (city) => ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.history, color: Colors.white54),
+            title: Text(
+              city,
+              style: GoogleFonts.lato(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            trailing: const Icon(
+              Icons.north_east,
+              color: Colors.white54,
+              size: 18,
+            ),
+            onTap: () => onSuggestionTap(city),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FavoritesStrip extends StatelessWidget {
+  const _FavoritesStrip({
+    required this.favorites,
+    required this.onCitySelected,
+    required this.onCityRemoved,
+    required this.activeCity,
+  });
+
+  final List<String> favorites;
+  final ValueChanged<String> onCitySelected;
+  final ValueChanged<String> onCityRemoved;
+  final String activeCity;
+
+  @override
+  Widget build(BuildContext context) {
+    if (favorites.isEmpty) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          'Bookmark cities to jump back quickly.',
+          style: GoogleFonts.lato(color: Colors.white70),
+        ),
+      );
+    }
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: favorites.map((city) {
+          final normalized = normalizeCity(city);
+          final isActive = normalizeCity(activeCity) == normalized;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: InputChip(
+              label: Text(
+                city,
+                style: GoogleFonts.lato(
+                  color: isActive ? Colors.black : Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              avatar: Icon(
+                Icons.location_on,
+                color: isActive ? Colors.black : Colors.white70,
+                size: 18,
+              ),
+              backgroundColor: Colors.white.withOpacity(0.08),
+              selectedColor: const Color(0xFFFFBF00),
+              selected: isActive,
+              onPressed: () => onCitySelected(city),
+              onDeleted: () => onCityRemoved(city),
+              deleteIconColor: isActive ? Colors.black : Colors.white70,
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _LoadingState extends StatelessWidget {
+  const _LoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _shimmerBox(height: 220),
+        const SizedBox(height: 18),
+        _shimmerGrid(),
+        const SizedBox(height: 18),
+        _shimmerStrip(),
+      ],
+    );
+  }
+
+  Widget _shimmerBox({double height = 180}) {
+    return Container(
+      height: height,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(24),
+      ),
+    );
+  }
+
+  Widget _shimmerGrid() {
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 2,
+      crossAxisSpacing: 14,
+      mainAxisSpacing: 14,
+      children: List.generate(4, (_) => _shimmerBox(height: 110)),
+    );
+  }
+
+  Widget _shimmerStrip() {
+    return SizedBox(
+      height: 140,
+      child: Row(
+        children: List.generate(
+          4,
+          (_) => Expanded(
+            child: Container(
+              margin: const EdgeInsets.only(right: 12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(18),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final TextEditingController _cityController = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
+  String _draftQuery = '';
 
   @override
   void initState() {
     super.initState();
     _cityController.text = ref.read(cityQueryProvider);
+    _draftQuery = _cityController.text;
+    _searchFocus.addListener(_handleFocusChange);
   }
 
   @override
   void dispose() {
+    _searchFocus.removeListener(_handleFocusChange);
     _cityController.dispose();
     _searchFocus.dispose();
     super.dispose();
@@ -39,6 +325,66 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (trimmed.isEmpty) return;
     ref.read(weatherNotifierProvider.notifier).updateCity(trimmed);
     _searchFocus.unfocus();
+    setState(() {
+      _draftQuery = trimmed;
+    });
+    ref.read(recentSearchProvider.notifier).addEntry(trimmed);
+    ref.read(favoritesProvider.notifier).toggle(trimmed);
+  }
+
+  void _handleFocusChange() {
+    setState(() {});
+  }
+
+  void _onCityChanged(String value) {
+    setState(() {
+      _draftQuery = value;
+    });
+  }
+
+  void _selectSuggestion(String city) {
+    _cityController.text = city;
+    _cityController.selection = TextSelection.fromPosition(
+      TextPosition(offset: city.length),
+    );
+    setState(() {
+      _draftQuery = city;
+    });
+    ref.read(weatherNotifierProvider.notifier).updateCity(city);
+    ref.read(recentSearchProvider.notifier).addEntry(city);
+    _searchFocus.unfocus();
+  }
+
+  List<String> _buildSuggestions(
+    String query,
+    List<String> favorites,
+    List<String> recents,
+  ) {
+    final normalized = query.trim().toLowerCase();
+    final ordered = [...favorites, ...recents];
+    final seen = <String>{};
+    final results = <String>[];
+    if (normalized.isEmpty) {
+      for (final city in recents) {
+        final key = normalizeCity(city);
+        if (seen.add(key)) {
+          results.add(city);
+        }
+        if (results.length >= 6) break;
+      }
+      return results;
+    }
+
+    for (final city in ordered) {
+      final key = normalizeCity(city);
+      if (seen.contains(key)) continue;
+      if (city.toLowerCase().contains(normalized)) {
+        results.add(city);
+        seen.add(key);
+      }
+      if (results.length >= 6) break;
+    }
+    return results;
   }
 
   @override
@@ -48,6 +394,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final isLight = themeProviderLocal == ThemeMode.light;
     final weatherState = ref.watch(weatherNotifierProvider);
     final city = ref.watch(cityQueryProvider);
+    final favoritesState = ref.watch(favoritesProvider);
+    final favorites = favoritesState.value ?? const <String>[];
+    final recentState = ref.watch(recentSearchProvider);
+    final recents = recentState.value ?? const <String>[];
+    final suggestions = _buildSuggestions(_draftQuery, favorites, recents);
+    final showSuggestions =
+        recentState.isLoading || recents.isNotEmpty || suggestions.isNotEmpty;
+
     if (_cityController.text != city) {
       _cityController.text = city;
       _cityController.selection = TextSelection.fromPosition(
@@ -63,38 +417,89 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [
-                Color(0xFF10121B),
-                Color(0xFF1E1E2F),
-              ],
+              colors: [Color(0xFF10121B), Color(0xFF1E1E2F)],
             ),
           ),
           child: RefreshIndicator(
-            onRefresh: () => ref.read(weatherNotifierProvider.notifier).refresh(),
+            onRefresh: () =>
+                ref.read(weatherNotifierProvider.notifier).refresh(),
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
               children: [
                 _buildTopRow(context, isLight, themeProvidreRead),
                 const SizedBox(height: 16),
                 _buildSearchField(context),
+                const SizedBox(height: 12),
+                _SuggestionList(
+                  isVisible: showSuggestions,
+                  isLoading: recentState.isLoading,
+                  hasHistory: recents.isNotEmpty,
+                  suggestions: suggestions,
+                  query: _draftQuery,
+                  onSuggestionTap: _selectSuggestion,
+                  onClearHistory: () =>
+                      ref.read(recentSearchProvider.notifier).clearAll(),
+                ),
+                const SizedBox(height: 12),
+                favoritesState.when(
+                  data: (favorites) => _FavoritesStrip(
+                    favorites: favorites,
+                    activeCity: city,
+                    onCitySelected: (selected) {
+                      _cityController.text = selected;
+                      _cityController.selection = TextSelection.fromPosition(
+                        TextPosition(offset: selected.length),
+                      );
+                      ref
+                          .read(weatherNotifierProvider.notifier)
+                          .updateCity(selected);
+                    },
+                    onCityRemoved: (entry) =>
+                        ref.read(favoritesProvider.notifier).remove(entry),
+                  ),
+                  loading: () => const SizedBox(
+                    height: 32,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: LinearProgressIndicator(minHeight: 4),
+                    ),
+                  ),
+                  error: (_, __) => const Text(
+                    'Unable to load favorites',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                ),
                 const SizedBox(height: 24),
                 weatherState.when(
-                  data: (bundle) => Column(
-                    children: [
-                      _CurrentConditionsCard(bundle: bundle),
-                      const SizedBox(height: 20),
-                      _InsightGrid(bundle: bundle),
-                      const SizedBox(height: 24),
-                      _HourlyForecastStrip(hourly: bundle.hourly),
-                    ],
-                  ),
-                  loading: () => const Padding(
-                    padding: EdgeInsets.only(top: 80),
-                    child: Center(child: CircularProgressIndicator()),
-                  ),
+                  data: (bundle) {
+                    final isFavoriteCity = favorites
+                        .map(normalizeCity)
+                        .contains(normalizeCity(bundle.current.city));
+                    return Column(
+                      children: [
+                        _CurrentConditionsCard(
+                          bundle: bundle,
+                          isFavorite: isFavoriteCity,
+                          onFavoriteTap: () => ref
+                              .read(favoritesProvider.notifier)
+                              .toggle(bundle.current.city),
+                        ),
+                        const SizedBox(height: 20),
+                        _InsightGrid(bundle: bundle),
+                        const SizedBox(height: 24),
+                        _HourlyForecastStrip(hourly: bundle.hourly),
+                        if (bundle.daily.isNotEmpty) ...[
+                          const SizedBox(height: 24),
+                          _DailyForecastList(daily: bundle.daily),
+                        ],
+                      ],
+                    );
+                  },
+                  loading: () => const _LoadingState(),
                   error: (err, stack) => _ErrorState(
                     message: err.toString(),
-                    onRetry: () => ref.read(weatherNotifierProvider.notifier).refresh(),
+                    onRetry: () =>
+                        ref.read(weatherNotifierProvider.notifier).refresh(),
                   ),
                 ),
               ],
@@ -106,7 +511,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildTopRow(
-      BuildContext context, bool isLight, ThemeProvider themeProvidreRead) {
+    BuildContext context,
+    bool isLight,
+    ThemeProvider themeProvidreRead,
+  ) {
     return Row(
       children: [
         Column(
@@ -123,10 +531,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             const SizedBox(height: 4),
             Text(
               'Stay ahead with live updates',
-              style: GoogleFonts.lato(
-                color: Colors.white70,
-                fontSize: 15,
-              ),
+              style: GoogleFonts.lato(color: Colors.white70, fontSize: 15),
             ),
           ],
         ),
@@ -148,11 +553,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       controller: _cityController,
       focusNode: _searchFocus,
       textInputAction: TextInputAction.search,
+      onChanged: _onCityChanged,
       onSubmitted: (_) => _handleSearch(),
-      style: GoogleFonts.lato(
-        color: Colors.white,
-        fontSize: 18,
-      ),
+      style: GoogleFonts.lato(color: Colors.white, fontSize: 18),
       decoration: InputDecoration(
         hintText: 'Search city or zip',
         hintStyle: GoogleFonts.lato(color: Colors.white54),
@@ -173,9 +576,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 }
 
 class _CurrentConditionsCard extends StatelessWidget {
-  const _CurrentConditionsCard({required this.bundle});
+  const _CurrentConditionsCard({
+    required this.bundle,
+    required this.isFavorite,
+    required this.onFavoriteTap,
+  });
 
   final WeatherBundle bundle;
+  final bool isFavorite;
+  final VoidCallback onFavoriteTap;
 
   String _formatDate(DateTime dateTime) {
     final formatter = DateFormat('EEE, MMM d • h:mm a');
@@ -224,15 +633,20 @@ class _CurrentConditionsCard extends StatelessWidget {
                   ],
                 ),
               ),
+              IconButton(
+                onPressed: onFavoriteTap,
+                icon: Icon(
+                  isFavorite ? Icons.bookmark : Icons.bookmark_border,
+                  color: Colors.white,
+                  size: 28,
+                ),
+              ),
               Image.network(
                 'https://openweathermap.org/img/wn/${current.condition.iconCode}@2x.png',
                 width: 80,
                 height: 80,
-                errorBuilder: (_, __, ___) => const Icon(
-                  Icons.wb_sunny,
-                  color: Colors.white,
-                  size: 48,
-                ),
+                errorBuilder: (_, __, ___) =>
+                    const Icon(Icons.wb_sunny, color: Colors.white, size: 48),
               ),
             ],
           ),
@@ -454,10 +868,8 @@ class _HourlyForecastStrip extends StatelessWidget {
                       'https://openweathermap.org/img/wn/${forecast.condition.iconCode}.png',
                       width: 50,
                       height: 50,
-                      errorBuilder: (_, __, ___) => const Icon(
-                        Icons.cloud,
-                        color: Colors.white,
-                      ),
+                      errorBuilder: (_, __, ___) =>
+                          const Icon(Icons.cloud, color: Colors.white),
                     ),
                     Text(
                       '${forecast.temperature.toStringAsFixed(0)}°',
@@ -516,10 +928,7 @@ class _ErrorState extends StatelessWidget {
           Text(
             message,
             textAlign: TextAlign.center,
-            style: GoogleFonts.lato(
-              color: Colors.white70,
-              fontSize: 14,
-            ),
+            style: GoogleFonts.lato(color: Colors.white70, fontSize: 14),
           ),
           const SizedBox(height: 16),
           ElevatedButton.icon(
