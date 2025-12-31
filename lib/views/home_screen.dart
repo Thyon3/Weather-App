@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../Theme/theme.dart';
 import '../models/weather_models.dart';
+import '../provider/alert_preferences_provider.dart';
 import '../provider/favorites_provider.dart';
 import '../provider/recent_search_provider.dart';
 import '../provider/theme_provider.dart';
@@ -527,7 +528,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final TextEditingController _cityController = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
   String _draftQuery = '';
-  final Set<String> _dismissedAlertIds = {};
 
   @override
   void initState() {
@@ -624,6 +624,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final city = ref.watch(cityQueryProvider);
     final favoritesState = ref.watch(favoritesProvider);
     final favorites = favoritesState.value ?? const <String>[];
+    final dismissedAlerts =
+        ref.watch(alertPreferencesProvider).value ?? const <String>{};
     final recentState = ref.watch(recentSearchProvider);
     final recents = recentState.value ?? const <String>[];
     final suggestions = _buildSuggestions(_draftQuery, favorites, recents);
@@ -740,7 +742,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         .contains(normalizeCity(bundle.current.city));
                     final activeAlerts = bundle.alerts
                         .where(
-                          (alert) => !_dismissedAlertIds.contains(
+                          (alert) => !dismissedAlerts.contains(
                             _alertId(alert),
                           ),
                         )
@@ -762,9 +764,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           _AlertsPanel(
                             alerts: activeAlerts,
                             onDismissed: (alert) {
-                              setState(() {
-                                _dismissedAlertIds.add(_alertId(alert));
-                              });
+                              ref
+                                  .read(alertPreferencesProvider.notifier)
+                                  .dismiss(_alertId(alert));
                             },
                           ),
                         ],
