@@ -1,3 +1,4 @@
+                            label: const Text('Manage'),
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -526,6 +527,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final TextEditingController _cityController = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
   String _draftQuery = '';
+  final Set<String> _dismissedAlertIds = {};
 
   @override
   void initState() {
@@ -577,6 +579,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ref.read(recentSearchProvider.notifier).addEntry(city);
     _searchFocus.unfocus();
   }
+
+  String _alertId(WeatherAlert alert) =>
+      '${alert.event}-${alert.start.millisecondsSinceEpoch}';
 
   List<String> _buildSuggestions(
     String query,
@@ -733,6 +738,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     final isFavoriteCity = favorites
                         .map(normalizeCity)
                         .contains(normalizeCity(bundle.current.city));
+                    final activeAlerts = bundle.alerts
+                        .where(
+                          (alert) => !_dismissedAlertIds.contains(
+                            _alertId(alert),
+                          ),
+                        )
+                        .toList();
                     return Column(
                       children: [
                         _CurrentConditionsCard(
@@ -745,6 +757,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ),
                         const SizedBox(height: 20),
                         _InsightGrid(bundle: bundle),
+                        if (activeAlerts.isNotEmpty) ...[
+                          const SizedBox(height: 20),
+                          _AlertsPanel(
+                            alerts: activeAlerts,
+                            onDismissed: (alert) {
+                              setState(() {
+                                _dismissedAlertIds.add(_alertId(alert));
+                              });
+                            },
+                          ),
+                        ],
                         if (bundle.airQuality != null) ...[
                           const SizedBox(height: 20),
                           _AirQualityCard(airQuality: bundle.airQuality!),
@@ -826,6 +849,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         suffixIcon: IconButton(
           onPressed: _handleSearch,
           icon: const Icon(Icons.send, color: Colors.white70),
+          tooltip: 'Search city',
         ),
         filled: true,
         fillColor: Colors.white.withOpacity(0.08),
@@ -1239,6 +1263,96 @@ class _PollutantStat extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _AlertsPanel extends StatelessWidget {
+  const _AlertsPanel({
+    required this.alerts,
+    required this.onDismissed,
+  });
+
+  final List<WeatherAlert> alerts;
+  final ValueChanged<WeatherAlert> onDismissed;
+
+  Color _severityColor(String severity) {
+    switch (severity.toLowerCase()) {
+      case 'extreme':
+        return const Color(0xFFB00020);
+      case 'severe':
+        return const Color(0xFFE65100);
+      case 'moderate':
+        return const Color(0xFFFBC02D);
+      case 'minor':
+        return const Color(0xFF66BB6A);
+      default:
+        return Colors.white70;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: alerts.map((alert) {
+        final color = _severityColor(alert.severity);
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.04),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: color.withOpacity(0.3)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: color),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      alert.event,
+                      style: GoogleFonts.lato(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => onDismissed(alert),
+                    icon: const Icon(Icons.close, color: Colors.white54),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Issued by ${alert.sender}',
+                style: GoogleFonts.lato(color: Colors.white54, fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                alert.description,
+                style: GoogleFonts.lato(color: Colors.white70),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(Icons.schedule, color: Colors.white54, size: 16),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${DateFormat('EEE HH:mm').format(alert.start)} → ${DateFormat('EEE HH:mm').format(alert.end)}',
+                    style: GoogleFonts.lato(color: Colors.white70, fontSize: 13),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 }
